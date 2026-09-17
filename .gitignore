@@ -1,0 +1,43 @@
+# Build trees (every configuration directory, including the closure builds)
+build/
+build-*/
+out/
+install/
+_deps/
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.swp
+*~
+
+# Compiled artifacts
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.ipdb
+*.iobj
+*.res
+*.tlog
+*.lastbuildstate
+*.nativecodeanalysis.xml
+*.vcxproj*
+vc140.pdb
+
+# Test and benchmark debris
+*.log
+*.dmp
+*.store
+*.store.tmp.*
+Testing/
+test-results/
+bench-results/

@@ -1,0 +1,29 @@
+@PACKAGE_INIT@
+
+# Route Convergence 1.0.0 - deterministic route-transition ordering,
+# dependency-safe state change and convergence-governance runtime.
+#
+# Imported target provided by this package:
+#   SummonSoftwareLabs::RouteConvergence
+#
+# The target is a static library and carries its own include directories and its
+# platform link dependencies, so a consumer only writes:
+#
+#   find_package(RouteConvergence CONFIG REQUIRED)
+#   target_link_libraries(app PRIVATE SummonSoftwareLabs::RouteConvergence)
+
+include(CMakeFindDependencyMacro)
+if(WIN32)
+  find_dependency(Threads)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/RouteConvergenceTargets.cmake")
+
+set(RouteConvergence_VERSION "@PROJECT_VERSION@")
+set(RouteConvergence_WIRE_VERSION 1)
+set(RouteConvergence_PERSISTENCE_VERSION 1)
+set(RouteConvergence_DIGEST_ENCODING_VERSION 1)
+set(RouteConvergence_PLAN_ENCODING_VERSION 1)
+set(RouteConvergence_STEP_SEMANTICS_VERSION 1)
+
+check_required_components(RouteConvergence)
