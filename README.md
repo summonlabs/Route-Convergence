@@ -1,9 +1,8 @@
 # Route Convergence
 
 **Route Convergence 1.0.0** is the deterministic route-transition ordering,
-dependency-safe state change and convergence-governance runtime of the
-Distributed Fabric Infrastructure / Fabric OS stack, published by Summon
-Software Labs.
+dependency-safe state change and convergence-governance runtime for
+data-center fabric infrastructure.
 
 It answers exactly one question:
 
