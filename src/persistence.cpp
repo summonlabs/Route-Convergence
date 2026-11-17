@@ -1,8 +1,10 @@
 #include "rc/persistence.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <system_error>
+#include <thread>
 
 #include "rc/bytes.hpp"
 #include "rc/version.hpp"
@@ -183,19 +185,33 @@ StoreDefect write_store_file_atomic(const std::filesystem::path& path,
     }
   }
 
-  std::filesystem::rename(temporary, path, code);
-  if (code) {
-    std::filesystem::remove(path, code);
-    code.clear();
+  // The rename replaces an existing store in one step. While a reader has the
+  // store open (an inspection, an antivirus or indexing scan) it fails on
+  // Windows until the reader closes the file, so it is retried for a bounded
+  // time (about 2 s). The store is never removed first: removing it opened a
+  // window with no store at all, and when the second rename also failed the
+  // write was lost.
+  for (int attempt = 0;; ++attempt) {
     std::filesystem::rename(temporary, path, code);
-    if (code) {
-      std::filesystem::remove(temporary, code);
-      error = "store file could not be replaced atomically";
-      return StoreDefect::IO_ERROR;
+    if (!code) {
+      error.clear();
+      return StoreDefect::NONE;
     }
+#if defined(_WIN32)
+    // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION and ERROR_LOCK_VIOLATION.
+    const bool transient = code.category() == std::system_category() &&
+                           (code.value() == 5 || code.value() == 32 || code.value() == 33);
+#else
+    const bool transient = false;
+#endif
+    if (!transient || attempt >= 100) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
-  error.clear();
-  return StoreDefect::NONE;
+  std::filesystem::remove(temporary, code);
+  error = "store file could not be replaced atomically";
+  return StoreDefect::IO_ERROR;
 }
 
 }  // namespace rc

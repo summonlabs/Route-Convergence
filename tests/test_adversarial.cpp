@@ -10,9 +10,13 @@
 // test asserts that exact documented invalidation instead.
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <process.h>
 #include <span>
@@ -1394,4 +1398,71 @@ RC_TEST(session_limit_refuses_a_session_beyond_the_bound) {
   server.stop();
   serving.join();
   RC_CHECK(server.active_sessions() <= 1u);
+}
+
+// PERSISTENCE UNDER A READER: another tool holding the store open (an
+// inspection, a scan) must not make a store write fail.
+RC_TEST(a_store_replacement_waits_for_a_reader_to_close) {
+  Scratch directory("reader");
+  const std::filesystem::path path = directory.file("held.store");
+  const Bytes first{1, 2, 3};
+  const Bytes second{4, 5, 6, 7};
+  std::string error;
+  const StoreDefect first_written = write_store_file_atomic(path, first, error);
+  bool reader_opened = false;
+  StoreDefect second_written = StoreDefect::IO_ERROR;
+  std::string second_error;
+  {
+    std::ifstream reader(path, std::ios::binary);
+    reader_opened = reader.is_open();
+    std::thread writer([&path, &second, &second_written, &second_error] {
+      second_written = write_store_file_atomic(path, second, second_error);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    reader.close();
+    writer.join();
+  }
+  std::ifstream check(path, std::ios::binary);
+  const std::string content((std::istreambuf_iterator<char>(check)),
+                            std::istreambuf_iterator<char>());
+  check.close();
+  RC_CHECK_EQ(first_written, StoreDefect::NONE);
+  RC_CHECK(reader_opened);
+  RC_CHECK_EQ(second_written, StoreDefect::NONE);
+  RC_CHECK(content == std::string("\x04\x05\x06\x07", 4));
+}
+
+// CONCURRENT SAVES: every public method is thread safe, save included.
+RC_TEST(concurrent_saves_leave_a_loadable_store) {
+  Scratch directory("concurrent");
+  Corpus corpus;
+  const std::filesystem::path path = directory.file("shared.store");
+  std::atomic<int> failures{0};
+  std::vector<std::thread> savers;
+  for (int saver = 0; saver < 8; ++saver) {
+    savers.emplace_back([&corpus, &path, &failures] {
+      for (int round = 0; round < 25; ++round) {
+        if (!corpus.governor().save(path).accepted()) {
+          failures.fetch_add(1);
+        }
+      }
+    });
+  }
+  for (std::thread& saver : savers) {
+    saver.join();
+  }
+  // The shared store holds exactly what one uninterrupted save of the same
+  // state writes.
+  const std::filesystem::path reference = directory.file("reference.store");
+  const bool reference_saved = corpus.governor().save(reference).accepted();
+  Bytes shared_bytes;
+  Bytes reference_bytes;
+  std::string read_error;
+  const StoreDefect shared_read = read_store_file(path, shared_bytes, read_error);
+  const StoreDefect reference_read = read_store_file(reference, reference_bytes, read_error);
+  RC_CHECK_EQ(failures.load(), 0);
+  RC_CHECK(reference_saved);
+  RC_CHECK_EQ(shared_read, StoreDefect::NONE);
+  RC_CHECK_EQ(reference_read, StoreDefect::NONE);
+  RC_CHECK(shared_bytes == reference_bytes);
 }

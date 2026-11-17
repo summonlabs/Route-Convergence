@@ -6,6 +6,7 @@
 #include <deque>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <shared_mutex>
 #include <string>
@@ -40,6 +41,9 @@ struct GovernorState {
   GovernorOptions options;
 
   mutable std::shared_mutex mutex;
+  // One save at a time: saves share one temporary file, and each writes the
+  // state current when it runs, so the last save to finish is also the newest.
+  std::mutex save_mutex;
 
   CoordinatorEpoch epoch;
   ConvergenceGeneration convergence;

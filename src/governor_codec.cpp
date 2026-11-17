@@ -757,6 +757,7 @@ PlanMutationResult ConvergenceGovernor::decode_state(std::span<const std::uint8_
 
 PlanMutationResult ConvergenceGovernor::save(const std::filesystem::path& path) {
   GovernorState& state = *impl_->state;
+  const std::lock_guard<std::mutex> save_guard(state.save_mutex);
   std::vector<std::uint8_t> payload;
   std::uint64_t epoch = 0;
   std::uint64_t convergence = 0;
